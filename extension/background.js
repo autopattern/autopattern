@@ -31,27 +31,33 @@ function getDB() {
 }
 
 // write + notify
-chrome.runtime.onMessage.addListener(async (msg, sender) => {
-    try {
-        const db = await getDB();
-        const tx = db.transaction('events', 'readwrite');
-        const store = tx.objectStore('events');
-        const req = store.add(msg);
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    (async () => {
+        try {
+            const db = await getDB();
+            const tx = db.transaction('events', 'readwrite');
+            const store = tx.objectStore('events');
+            const req = store.add(msg);
 
-        tx.oncomplete = () => {
-            console.log('WRITE COMPLETE:', msg);
-            // notify dashboards to refresh (non-blocking)
-            chrome.runtime.sendMessage({ action: 'refresh_dashboard' });
-        };
+            tx.oncomplete = () => {
+                console.log('WRITE COMPLETE:', msg);
+                // notify dashboards to refresh (non-blocking)
+                chrome.runtime.sendMessage({ action: 'refresh_dashboard' });
+                sendResponse({ status: 'ok' });
+            };
 
-        tx.onerror = (err) => {
-            console.error('WRITE FAILED', err);
-        };
-    } catch (err) {
-        console.error('DB write failed', err);
-    }
-    // Return false to indicate asynchronous response not used
-    return false;
+            tx.onerror = (err) => {
+                console.error('WRITE FAILED', err);
+                sendResponse({ status: 'error', error: err.toString() });
+            };
+        } catch (err) {
+            console.error('DB write failed', err);
+            sendResponse({ status: 'error', error: err.toString() });
+        }
+    })();
+    
+    // Return true to indicate asynchronous response will be sent
+    return true;
 });
 
 

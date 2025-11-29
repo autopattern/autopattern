@@ -258,21 +258,6 @@ document.addEventListener("focusout", async (e) => {
     safeSend(await buildEventObject("blur", { data: await metaFromElement(e.target) }));
 }, true);
 
-// ------------------ WHEEL ------------------
-function onWheel(e) {
-    buildEventObject("wheel", {
-        data: {
-            deltaX: e.deltaX,
-            deltaY: e.deltaY,
-            deltaZ: e.deltaZ,
-            deltaMode: e.deltaMode,
-            x: e.clientX,
-            y: e.clientY
-        }
-    }).then(safeSend);
-}
-document.addEventListener("wheel", debounce(onWheel, 100), { passive: true });
-
 // ------------------ SCROLL ------------------
 function onScroll() {
     buildEventObject("scroll", {
