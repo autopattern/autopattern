@@ -14,6 +14,15 @@ function safeSend(msg) {
 }
 
 // ------------------ Helpers ------------------
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
 function getCssSelector(el) {
     if (!el) return null;
     if (el.id) return `#${el.id}`;
@@ -248,6 +257,21 @@ document.addEventListener("focusin", async (e) => {
 document.addEventListener("focusout", async (e) => {
     safeSend(await buildEventObject("blur", { data: await metaFromElement(e.target) }));
 }, true);
+
+// ------------------ WHEEL ------------------
+function onWheel(e) {
+    buildEventObject("wheel", {
+        data: {
+            deltaX: e.deltaX,
+            deltaY: e.deltaY,
+            deltaZ: e.deltaZ,
+            deltaMode: e.deltaMode,
+            x: e.clientX,
+            y: e.clientY
+        }
+    }).then(safeSend);
+}
+document.addEventListener("wheel", debounce(onWheel, 100), { passive: true });
 
 // ------------------ SCROLL ------------------
 function onScroll() {
