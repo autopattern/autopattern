@@ -1,0 +1,10 @@
+{
+  "name": "cogniweave",
+  "version": "1.0.0",
+  "description": "CogniWeave Project",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT"
+}
