@@ -14,8 +14,10 @@ class NoiseReducer {
 
     // Check if element is insignificant
     isInsignificantElement(element) {
-        if (!element || !element.tagName) return true;
-        return this.INSIGNIFICANT_TAGS.has(element.tagName);
+        if (!element) return true;
+        const tagName = typeof element === 'string' ? element : element.tagName;
+        if (!tagName) return true;
+        return this.INSIGNIFICANT_TAGS.has(tagName);
     }
 
     // Check if two events are similar enough to combine
@@ -49,7 +51,7 @@ class NoiseReducer {
     // Check if event should be filtered out
     shouldFilterEvent(event) {
         // Filter out events on insignificant elements
-        if (event.data?.element && this.isInsignificantElement(event.data.element)) {
+        if (event.data?.tag && this.isInsignificantElement(event.data.tag)) {
             return true;
         }
 
@@ -147,14 +149,6 @@ class NoiseReducer {
     processEvent(event) {
         if (this.shouldFilterEvent(event)) {
             return null;
-        }
-
-        // Check if should combine with last event
-        if (this.lastEvent && this.areSimilarEvents(this.lastEvent, event)) {
-            this.lastEvent.timestamp = event.timestamp;
-            this.lastEvent.data = { ...this.lastEvent.data, ...event.data };
-            this.lastEvent.combinedCount = (this.lastEvent.combinedCount || 1) + 1;
-            return null; // Don't save, already combined
         }
 
         this.lastEvent = event;

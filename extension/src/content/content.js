@@ -299,7 +299,7 @@ async function handleInputEvent(e) {
     );
 }
 
-document.addEventListener("input", debounce(handleInputEvent, 300), true);
+document.addEventListener("input", debounce(handleInputEvent, 100), true);
 document.addEventListener("change", handleInputEvent, true);
 
 // ------------------ FOCUS ------------------
@@ -336,7 +336,7 @@ function onScroll() {
         },
     }).then(safeSend);
 }
-window.addEventListener("scroll", debounce(onScroll, 300), { passive: true });
+window.addEventListener("scroll", debounce(onScroll, 100), { passive: true });
 
 // ------------------ NAVIGATION ------------------
 buildEventObject("page_visit", {
@@ -358,12 +358,9 @@ window.addEventListener("popstate", () => {
     const _pushState = history.pushState;
     history.pushState = function () {
         _pushState.apply(history, arguments);
-        safeSend({
-            type: "navigation",
-            url: location.href,
-            title: document.title,
-            timestamp: Date.now(),
-        });
+        buildEventObject("navigation", {
+            data: { url: location.href, title: document.title }
+        }).then(safeSend);
     };
 })();
 
@@ -376,11 +373,9 @@ setInterval(() => {
 
 // ------------------ Visibility ------------------
 document.addEventListener("visibilitychange", () => {
-    safeSend({
-        type: "visibility_change",
-        visibility: document.visibilityState,
-        timestamp: Date.now(),
-    });
+    buildEventObject("visibility_change", {
+        data: { visibility: document.visibilityState }
+    }).then(safeSend);
 });
 
 // ------------------ UI State Observer ------------------
@@ -396,14 +391,13 @@ document.addEventListener("visibilitychange", () => {
         ) {
             clearTimeout(timer);
             timer = setTimeout(() => {
-                safeSend({
-                    type: "ui_state_change",
-                    hint:
-                        document.querySelector('[role="dialog"], .modal')
+                buildEventObject("ui_state_change", {
+                    data: {
+                        hint: document.querySelector('[role="dialog"], .modal')
                             ? "modal_opened"
-                            : "dom_updated",
-                    timestamp: Date.now(),
-                });
+                            : "dom_updated"
+                    }
+                }).then(safeSend);
             }, 400);
         }
     });
@@ -413,14 +407,14 @@ document.addEventListener("visibilitychange", () => {
 // ------------------ Page Structure ------------------
 (function () {
     function emit() {
-        safeSend({
-            type: "page_structure",
-            containers: Array.from(document.body.children)
-                .slice(0, 5)
-                .map((e) => e.id || e.tagName),
-            route: location.pathname,
-            timestamp: Date.now(),
-        });
+        buildEventObject("page_structure", {
+            data: {
+                containers: Array.from(document.body.children)
+                    .slice(0, 5)
+                    .map((e) => e.id || e.tagName),
+                route: location.pathname
+            }
+        }).then(safeSend);
     }
     emit();
     let last = location.pathname;
