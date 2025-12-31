@@ -214,6 +214,12 @@ const csvExporter = new CSVExporter();
 let currentEvents = [];
 let currentWorkflows = [];
 
+window.addEventListener("DOMContentLoaded", () => {
+    const fullExportBtn = document.getElementById("export-full-db");
+    if (fullExportBtn) fullExportBtn.onclick = exportAllIndexedDBToCSV;
+});
+
+
 document.getElementById('export-csv').onclick = () => {
     if (currentEvents.length === 0) {
         alert('No events to export');
@@ -269,3 +275,51 @@ async function start() {
 }
 
 start();
+
+// ---------- EXPORT FULL INDEXEDDB TO CSV (RAW + CANONICAL) ----------
+async function exportAllIndexedDBToCSV() {
+    const db = await openDB();
+    const tx = db.transaction("events", "readonly");
+    const store = tx.objectStore("events");
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+        const rows = req.result;
+        if (!rows.length) {
+            alert("No events stored yet.");
+            return;
+        }
+
+        // CSV Headers
+        const headers = [
+            "id","timestamp","event","url",
+            "canonical_id","selector","xpath","type"
+        ];
+
+        // Build CSV rows
+        const csvData = rows.map(r => ([
+            r.id ?? "",
+            r.timestamp ?? "",
+            r.event ?? "",
+            r.url ?? "",
+            r?.canonical?.canonical_id ?? "",
+            r?.canonical?.selector ?? "",
+            r?.canonical?.xpath ?? "",
+            r?.canonical?.type ?? ""
+        ].map(String).join(",")));
+
+        const csvText = headers.join(",") + "\n" + csvData.join("\n");
+
+        // Trigger download
+        const blob = new Blob([csvText], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "taskmining_export_full.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    req.onerror = () => alert("Failed to export DB to CSV");
+}
+
