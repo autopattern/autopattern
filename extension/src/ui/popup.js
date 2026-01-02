@@ -37,7 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response && response.status === 'ok') {
                 setRecordingUI(false);
                 if (response.workflow) {
-                    alert(`Workflow saved: ${response.workflow.name}`);
+                    // Show success notification
+                    chrome.notifications.create({
+                        type: 'basic',
+                        iconUrl: 'icon.png',
+                        title: 'Workflow Saved',
+                        message: response.workflow.name
+                    });
                 }
             }
         });

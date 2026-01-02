@@ -112,12 +112,20 @@ function isActionableElement(el) {
 
 // ---------- Event Builder ----------
 function buildEvent(type, el, extra = {}) {
+    // If clicking on SVG elements (svg, path, circle, rect, etc.), find the closest clickable parent
+    if (el && ['svg', 'path', 'circle', 'rect', 'g', 'polygon', 'polyline', 'line', 'ellipse'].includes(el.tagName?.toLowerCase())) {
+        const clickableParent = el.closest('a, button, [role="button"], [onclick]');
+        if (clickableParent) {
+            el = clickableParent;
+        }
+    }
+
     // Find closest link for href if not on the element itself
     const closestLink = el?.closest ? el.closest('a') : null;
     const href = el?.href || closestLink?.href || null;
 
     const eventData = {
-        type: type, // Renamed from 'event' to 'type' for consistency
+        type: type,
         timestamp: Date.now(),
         url: location.href,
         title: document.title,

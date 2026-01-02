@@ -11,9 +11,51 @@ function generatePlaywrightCode(workflow) {
     let code = `const { chromium } = require('playwright');
 
 (async () => {
-  // Launch browser
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext();
+  // Launch browser with stealth settings to avoid bot detection
+  const browser = await chromium.launch({ 
+    headless: false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials'
+    ]
+  });
+  
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    viewport: { width: 1920, height: 1080 },
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9'
+    }
+  });
+  
+  // Remove automation indicators
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => false,
+    });
+    
+    // Override the navigator.plugins to make it look real
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    
+    // Override chrome property
+    window.chrome = {
+      runtime: {}
+    };
+    
+    // Override permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+    );
+  });
+  
   const page = await context.newPage();
 
   try {
@@ -53,8 +95,13 @@ function generatePlaywrightCode(workflow) {
             case 'keydown':
                 code += generateKeydownAction(event, index);
                 break;
+            case 'page_visit':
+            case 'navigation':
+                // These are handled by URL changes, skip
+                break;
             default:
-                code += `    // Unhandled event type: ${type}\n\n`;
+                // Skip unknown event types silently
+                break;
         }
     });
 
@@ -74,10 +121,11 @@ function generatePlaywrightCode(workflow) {
 }
 
 function generateClickAction(event, index) {
-    const { selector, xpath, text, href, tagName, id, name } = event;
+    const { selector, xpath, text, href, tagName, id, name, className } = event;
     let code = `    // Step ${index + 1}: Click on ${tagName || 'element'}\n`;
+    const isSvgLike = ['svg', 'path', 'circle', 'rect', 'g', 'polygon', 'polyline', 'line', 'ellipse'].includes((tagName || '').toLowerCase());
     
-    // Priority: Selector > ID > Name > Text > XPath > HREF (last resort)
+    // Priority: Selector > ID > Name > Text > ClassName (if specific) > XPath/ancestor for SVG > HREF (last resort)
     if (selector) {
         code += `    await page.click('${escapeCssSelector(selector)}');\n`;
     } else if (id && !isDynamicId(id)) {
@@ -85,13 +133,32 @@ function generateClickAction(event, index) {
     } else if (name) {
         code += `    await page.click('[name="${escapeString(name)}"]');\n`;
     } else if (text && text.trim().length > 0) {
-        // Use text even if it's longer - it's more reliable
-        const cleanText = text.trim().slice(0, 100);
+        const cleanText = text.trim().slice(0, 120);
         code += `    await page.getByText('${escapeString(cleanText)}', { exact: false }).first().click();\n`;
-    } else if (xpath) {
-        code += `    await page.locator('xpath=${escapeXPath(xpath)}').click();\n`;
+    } else if (className && typeof className === 'string' && className.trim()) {
+        const classes = className.split(/\s+/).filter(c => c.length > 0 && !c.startsWith('ng-') && !c.startsWith('react-'));
+        if (classes.length > 0 && classes.length <= 3) {
+            code += `    await page.locator('.${classes[0]}').first().click();\n`;
+        } else if (xpath) {
+            // fallback to xpath below
+        }
+    }
+
+    else if (xpath) {
+        if (isSvgLike) {
+            // Try clicking the closest ancestor link/button instead of the SVG path itself
+            const ancestorAnchor = `${escapeXPath(xpath)}/ancestor::a[1]`;
+            code += `    const svgTarget = page.locator('xpath=${ancestorAnchor}');\n`;
+            code += `    if (await svgTarget.count()) {\n`;
+            code += `      await svgTarget.first().click();\n`;
+            code += `    } else {\n`;
+            code += `      await page.locator('xpath=${escapeXPath(xpath)}').click();\n`;
+            code += `    }\n`;
+        } else {
+            code += `    await page.locator('xpath=${escapeXPath(xpath)}').click();\n`;
+        }
     } else if (href) {
-        // HREF is last resort - extract domain or path for better matching
+        // HREF is last resort - extract domain for better matching
         const hrefPart = extractHrefIdentifier(href);
         code += `    await page.locator('a[href*="${escapeString(hrefPart)}"]').first().click();\n`;
     } else {

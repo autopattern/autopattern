@@ -146,7 +146,7 @@ async function automateWorkflow(idx) {
     }
 
     if (!wf.events || wf.events.length === 0) {
-        alert('This workflow has no events to automate.');
+        showNotification('This workflow has no events to automate.', 'warning');
         return;
     }
 
@@ -185,13 +185,13 @@ async function automateWorkflow(idx) {
         if (result.success) {
             showAutomationResult(wf.name, result);
         } else {
-            alert(`Automation failed:\n\n${result.error}\n\n${result.details || ''}`);
+            showErrorModal('Automation Failed', result.error, result.details);
         }
 
     } catch (error) {
         overlay.remove();
         console.error('Automation error:', error);
-        alert(`Failed to automate workflow:\n\n${error.message}`);
+        showErrorModal('Automation Error', error.message);
     }
 }
 
@@ -304,8 +304,9 @@ function deleteWorkflow(idx) {
         (res) => {
             if (res?.status === 'ok') {
                 loadWorkflows();
+                showNotification('Workflow deleted successfully', 'success');
             } else {
-                alert('Failed to delete workflow');
+                showNotification('Failed to delete workflow', 'error');
             }
         }
     );
@@ -317,4 +318,91 @@ function escapeHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 400px;
+        font-family: system-ui, -apple-system, sans-serif;
+    `;
+    
+    const colors = {
+        success: { bg: '#4CAF50', text: '#fff' },
+        error: { bg: '#f44336', text: '#fff' },
+        warning: { bg: '#ff9800', text: '#fff' },
+        info: { bg: '#2196F3', text: '#fff' }
+    };
+    
+    const color = colors[type] || colors.info;
+    notification.style.backgroundColor = color.bg;
+    notification.style.color = color.text;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function showErrorModal(title, message, details = null) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    
+    const titleEl = document.createElement('h3');
+    titleEl.textContent = `❌ ${title}`;
+    titleEl.style.color = '#f44336';
+    
+    const messageEl = document.createElement('p');
+    messageEl.textContent = message;
+    messageEl.style.marginTop = '15px';
+    
+    content.appendChild(titleEl);
+    content.appendChild(messageEl);
+    
+    if (details) {
+        const detailsEl = document.createElement('details');
+        detailsEl.style.marginTop = '15px';
+        
+        const summary = document.createElement('summary');
+        summary.textContent = 'Technical details';
+        summary.style.cursor = 'pointer';
+        
+        const pre = document.createElement('pre');
+        pre.style.maxHeight = '200px';
+        pre.style.overflow = 'auto';
+        pre.style.fontSize = '12px';
+        pre.textContent = details;
+        
+        detailsEl.appendChild(summary);
+        detailsEl.appendChild(pre);
+        content.appendChild(detailsEl);
+    }
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.marginTop = '20px';
+    closeBtn.onclick = () => overlay.remove();
+    
+    content.appendChild(closeBtn);
+    overlay.appendChild(content);
+    overlay.onclick = (e) => {
+        if (e.target === overlay) overlay.remove();
+    };
+    
+    document.body.appendChild(overlay);
 }
