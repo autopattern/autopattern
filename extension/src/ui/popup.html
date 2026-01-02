@@ -1,9 +1,129 @@
 <!DOCTYPE html>
 <html>
-  <body style="padding: 16px; font-family: Arial; min-width: 200px;">
-    <h3 style="margin-top: 0;">Task Mining</h3>
-    <p style="font-size: 12px; color: #666;">Capture is active.</p>
-    <button id="open-dashboard" style="width: 100%; padding: 8px; cursor: pointer; background: #0d7377; color: white; border: none; border-radius: 4px;">Open Dashboard</button>
+<head>
+    <style>
+        body {
+            padding: 16px;
+            font-family: Arial, sans-serif;
+            min-width: 300px;
+            background: #f5f5f5;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .status {
+            padding: 8px;
+            margin-bottom: 12px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        #start-recording {
+            background: #4caf50;
+            color: white;
+        }
+
+        #start-recording:hover:not(:disabled) {
+            background: #45a049;
+        }
+
+        #start-recording:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        #stop-recording {
+            background: #f44336;
+            color: white;
+        }
+
+        #stop-recording:hover:not(:disabled) {
+            background: #da190b;
+        }
+
+        #stop-recording:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        #open-dashboard {
+            background: #0d7377;
+            color: white;
+        }
+
+        #open-dashboard:hover {
+            background: #0f9b8e;
+        }
+
+        .info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h3>Automation Recorder</h3>
+    
+    <div class="status">
+        <span class="status-indicator" id="recording-status">⚪ Stopped</span>
+    </div>
+
+    <input 
+        type="text" 
+        id="workflow-name" 
+        placeholder="Enter workflow name (optional)"
+    />
+
+    <button id="start-recording">Start Recording</button>
+    <button id="stop-recording" disabled>Stop Recording</button>
+
+    <button id="open-dashboard">Open Dashboard</button>
+
+    <div class="info">
+        <p style="margin: 0;">Recordings capture:</p>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+            <li>Clicks</li>
+            <li>Text input</li>
+            <li>Navigation</li>
+            <li>Scrolls (meaningful)</li>
+        </ul>
+    </div>
+
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>

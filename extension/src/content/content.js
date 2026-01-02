@@ -1,429 +1,213 @@
-// content.js - Advanced Task Mining + Noise Reduction
-// ---------------------------------------------------------
+// content.js — Simplified, automation-ready recorder
 
-const CAPTURE_INPUT_VALUE = false;
-const CAPTURE_INPUT_HASH = true;
-
-// Import noise reducer
-const noiseReducer = new NoiseReducer();
-
-// ------------------ Safe Send ------------------
-function safeSend(msg) {
-    // Apply noise reduction before sending
-    const filtered = noiseReducer.processEvent(msg);
-    
-    if (!filtered) {
-        return; // Event was filtered out
+function recordEvent(event) {
+    // Check if extension context is valid before sending
+    if (!chrome.runtime?.id) {
+        console.warn('Extension context invalidated. Please refresh the page.');
+        return;
     }
     
     try {
-        chrome.runtime.sendMessage(filtered, () => {
-            if (chrome.runtime.lastError) {}
+        chrome.runtime.sendMessage({
+            action: 'RECORD_EVENT',
+            event
         });
-    } catch (e) {}
-}
-
-// ------------------ Helpers ------------------
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        const context = this;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(context, args), wait);
-    };
-}
-
-function getCssSelector(el) {
-    if (!el) return null;
-    if (el.id) return `#${el.id}`;
-    const parts = [];
-    while (el && el.nodeType === 1 && el.tagName.toLowerCase() !== "html") {
-        let part = el.tagName.toLowerCase();
-        if (el.className) {
-            const cls = String(el.className).trim().split(/\s+/)[0];
-            if (cls) part += `.${cls}`;
+    } catch (error) {
+        // Silently handle context invalidation - happens during extension reload
+        if (error.message?.includes('Extension context invalidated')) {
+            console.warn('Extension reloaded. Refresh page to continue recording.');
+        } else {
+            console.error('Error recording event:', error);
         }
-        const parent = el.parentNode;
-        if (parent) {
-            const siblings = Array.from(parent.children).filter(
-                (e) => e.tagName === el.tagName
-            );
-            if (siblings.length > 1) {
-                const idx = Array.from(parent.children).indexOf(el) + 1;
-                part += `:nth-child(${idx})`;
-            }
-        }
-        parts.unshift(part);
-        el = el.parentNode;
     }
-    return parts.length ? parts.join(" > ") : null;
+}
+
+// ---------- Helpers ----------
+function debounce(fn, delay) {
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), delay);
+    };
 }
 
 function getXPath(el) {
     if (!el) return null;
-    let xpath = "";
-    for (; el && el.nodeType === 1; el = el.parentNode) {
-        let idx = 1;
-        for (let sib = el.previousSibling; sib; sib = sib.previousSibling) {
-            if (sib.nodeType === 1 && sib.nodeName === el.nodeName) idx++;
+    let path = '';
+    let current = el;
+    
+    while (current && current.nodeType === 1) {
+        // Optimization: If we find a stable ID, we can stop and make the path relative to it
+        if (current.id && !isDynamicId(current.id)) {
+            path = `//*[@id="${current.id}"]` + path;
+            return path;
         }
-        xpath = "/" + el.nodeName.toLowerCase() + "[" + idx + "]" + xpath;
+        
+        let idx = 1;
+        let sib = current.previousSibling;
+        while (sib) {
+            if (sib.nodeType === 1 && sib.nodeName === current.nodeName) idx++;
+            sib = sib.previousSibling;
+        }
+        path = `/${current.nodeName.toLowerCase()}[${idx}]` + path;
+        current = current.parentNode;
     }
-    return xpath || null;
+    return path;
 }
 
-function shortText(s, n = 120) {
-    if (!s) return "";
-    let t = String(s).trim();
-    return t.length > n ? t.slice(0, n) + "…" : t;
+function isDynamicId(id) {
+    if (!id) return true;
+    // Detect dynamic IDs: random strings, underscores with numbers, hashes, etc.
+    if (id.length > 20) return true; // Too long, likely dynamic
+    if (/^[_:]/.test(id)) return true; // Starts with _ or : (Google-style)
+    if (/[A-Z]{2,}[a-z]+[A-Z]/.test(id)) return true; // camelCase gibberish
+    if (/\d{3,}/.test(id)) return true; // Contains 3+ consecutive digits
+    if (/^[a-f0-9]{8,}$/i.test(id)) return true; // Looks like a hash
+    return false;
 }
 
-// ------------------ SHA-256 hashing ------------------
-async function sha256Hex(str) {
-    const enc = new TextEncoder();
-    const data = enc.encode(str);
-    const hash = await crypto.subtle.digest("SHA-256", data);
-    const arr = Array.from(new Uint8Array(hash));
-    return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+function getSelector(el) {
+    if (!el) return null;
+    
+    // 1. Stable ID (not dynamic)
+    if (el.id && !isDynamicId(el.id)) return `#${el.id}`;
+    
+    // 2. data-testid (best for automation)
+    if (el.getAttribute('data-testid')) {
+        return `[data-testid="${el.getAttribute('data-testid')}"]`;
+    }
+    
+    // 3. name attribute (common for forms)
+    if (el.name) return `[name="${el.name}"]`;
+    
+    // 4. aria-label
+    if (el.getAttribute('aria-label')) {
+        return `[aria-label="${el.getAttribute('aria-label')}"]`;
+    }
+    
+    // 5. Class name (if specific enough)
+    if (el.className && typeof el.className === 'string' && el.className.trim().length > 0) {
+        const classes = el.className.split(/\s+/).filter(c => !c.startsWith('ng-') && !c.startsWith('react-'));
+        if (classes.length > 0 && classes.length < 3) {
+            return `.${classes.join('.')}`;
+        }
+    }
+    
+    return null;
 }
 
-// ------------------ DOM-TREE CAPTURE ------------------
-function getDomContext(el) {
-    if (!el) return {};
+function isActionableElement(el) {
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toLowerCase();
+    // Filter out non-actionable containers
+    if (['html', 'body', 'div', 'span', 'section', 'article', 'main'].includes(tag)) {
+        // Only allow if it has click handlers or special attributes
+        if (el.onclick || el.getAttribute('role') === 'button' || el.getAttribute('tabindex')) {
+            return true;
+        }
+        return false;
+    }
+    return true; // buttons, links, inputs, etc.
+}
 
-    const parent = el.parentElement
-        ? {
-              tag: el.parentElement.tagName,
-              id: el.parentElement.id,
-              classes: el.parentElement.className,
-          }
-        : null;
-
-    const siblings = el.parentElement
-        ? Array.from(el.parentElement.children)
-              .slice(0, 7)
-              .map((e) => ({
-                  tag: e.tagName,
-                  id: e.id,
-                  classes: e.className,
-                  text: shortText(e.innerText),
-              }))
-        : [];
-
-    const ancestors = [];
-    let p = el.parentElement;
-    while (p && p.tagName !== "HTML") {
-        ancestors.push({
-            tag: p.tagName,
-            id: p.id,
-            classes: p.className,
-        });
-        p = p.parentElement;
+// ---------- Event Builder ----------
+function buildEvent(type, el, extra = {}) {
+    // If clicking on SVG elements (svg, path, circle, rect, etc.), find the closest clickable parent
+    if (el && ['svg', 'path', 'circle', 'rect', 'g', 'polygon', 'polyline', 'line', 'ellipse'].includes(el.tagName?.toLowerCase())) {
+        const clickableParent = el.closest('a, button, [role="button"], [onclick]');
+        if (clickableParent) {
+            el = clickableParent;
+        }
     }
 
-    return { parent, siblings, ancestors };
-}
+    // Find closest link for href if not on the element itself
+    const closestLink = el?.closest ? el.closest('a') : null;
+    const href = el?.href || closestLink?.href || null;
 
-// ------------------ Semantic Classification ------------------
-function classifyElement(el, meta) {
-    const text = (meta.text || "").toLowerCase();
-    const id = (meta.id || "").toLowerCase();
-    const cls = String(meta.classes || "").toLowerCase();
-    const ph = (el.placeholder || "").toLowerCase();
-
-    if (text.includes("login") || id.includes("login")) return "login_button";
-    if (text.includes("submit") || id.includes("submit")) return "submit_button";
-
-    if (meta.tag === "INPUT") {
-        if ((el.type || "").toLowerCase() === "password") return "password_field";
-        if ((el.type || "").toLowerCase() === "email") return "email_field";
-        if (ph.includes("search") || id.includes("search")) return "search_box";
-    }
-
-    if (meta.tag === "A") return "link";
-    if (cls.includes("btn") || cls.includes("button")) return "button";
-
-    return "generic_element";
-}
-
-// ------------------ Build Event ------------------
-async function buildEventObject(type, extra = {}) {
-    return {
-        event: type,
+    const eventData = {
+        type: type,
         timestamp: Date.now(),
         url: location.href,
         title: document.title,
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-        scrollY: window.scrollY || window.pageYOffset || 0,
-        page_fingerprint: [
-            location.hostname,
-            location.pathname.split("/")[1] || "",
-            document.body.children.length,
-        ].join("|"),
-        ...extra,
-    };
-}
-
-// ------------------ Rich Element Metadata ------------------
-function extractSemanticMetadata(el) {
-    if (!el) return {};
-
-    return {
-        tag: el.tagName,
-        id: el.id || null,
-        classes: el.className || null,
-
-        aria_label: el.getAttribute("aria-label"),
-        role: el.getAttribute("role"),
-        name: el.getAttribute("name"),
-        title: el.getAttribute("title"),
-        placeholder: el.getAttribute("placeholder"),
-
-        text: (el.innerText || "").slice(0, 80),
-
-        icon_class: (() => {
-            const icon = el.querySelector("i, svg");
-            if (!icon) return null;
-            if (icon.tagName === "SVG") return "svg-icon";
-            return icon.className || null;
-        })(),
-    };
-}
-
-// ------------------ Meta From Element ------------------
-async function metaFromElement(el) {
-    if (!el) return {};
-
-    const semantic = extractSemanticMetadata(el);
-    const domCtx = getDomContext(el);
-
-    return {
-        ...semantic,
-        css_selector: getCssSelector(el),
+        
+        // Element details
+        tagName: el?.tagName?.toLowerCase() || null,
+        id: el?.id || null,
+        className: el?.className || null,
+        name: el?.name || null,
+        value: el?.value || extra.value || null,
+        href: href,
+        text: el?.innerText?.slice(0, 100) || extra.text || null,
+        
+        // Selectors
+        selector: getSelector(el),
         xpath: getXPath(el),
-        dom_context: domCtx,
-        element_type: classifyElement(el, semantic),
+        
+        // Extra data
+        ...extra
     };
+
+    return eventData;
 }
 
-// ------------------ CLICK ------------------
-document.addEventListener(
-    "click",
-    async (e) => {
-        const el = e.target;
-        const meta = await metaFromElement(el);
-        const rect = el.getBoundingClientRect();
+// ---------- CLICK ----------
+document.addEventListener('click', e => {
+    if (!isActionableElement(e.target)) return;
+    recordEvent(buildEvent('click', e.target));
+}, true);
 
-        safeSend(
-            await buildEventObject("click", {
-                data: {
-                    ...meta,
-                    x: e.clientX,
-                    y: e.clientY,
-                    bbox: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-                    button: e.button,
-                },
-            })
-        );
-    },
-    true
-);
+// ---------- INPUT & CHANGE ----------
+// Capture input for text fields
+document.addEventListener('input', debounce(e => {
+    if (e.target.tagName === 'SELECT') return; // Handle selects in 'change'
+    recordEvent(buildEvent('input', e.target));
+}, 500), true);
 
-// ------------------ RIGHT CLICK ------------------
-document.addEventListener(
-    "contextmenu",
-    async (e) => {
-        safeSend(
-            await buildEventObject("right_click", {
-                data: await metaFromElement(e.target),
-            })
-        );
-    },
-    true
-);
-
-// ------------------ DRAG ------------------
-document.addEventListener(
-    "dragstart",
-    async (e) => {
-        safeSend(
-            await buildEventObject("drag_start", {
-                data: await metaFromElement(e.target),
-            })
-        );
-    },
-    true
-);
-
-document.addEventListener(
-    "drop",
-    async (e) => {
-        safeSend(
-            await buildEventObject("drop", {
-                data: await metaFromElement(e.target),
-            })
-        );
-    },
-    true
-);
-
-// ------------------ INPUT ------------------
-function fieldNameForInput(el) {
-    return (
-        el.name ||
-        el.getAttribute("id") ||
-        el.getAttribute("aria-label") ||
-        el.placeholder ||
-        ""
-    );
-}
-
-async function handleInputEvent(e) {
-    const el = e.target;
-    const meta = await metaFromElement(el);
-
-    let inputInfo = { length: (el.value || "").length };
-    if (CAPTURE_INPUT_VALUE && CAPTURE_INPUT_HASH) {
-        inputInfo.hash = await sha256Hex(el.value);
+// Capture change for select elements and checkboxes/radios
+document.addEventListener('change', e => {
+    const tag = e.target.tagName;
+    if (tag === 'SELECT' || e.target.type === 'checkbox' || e.target.type === 'radio') {
+        recordEvent(buildEvent('change', e.target));
     }
+}, true);
 
-    safeSend(
-        await buildEventObject("input", {
-            data: {
-                ...meta,
-                field_type: el.type || el.tagName,
-                field_name: fieldNameForInput(el),
-                input: inputInfo,
-            },
-        })
-    );
+// ---------- KEYBOARD (Enter key) ----------
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        recordEvent(buildEvent('keydown', e.target, { key: 'Enter' }));
+    }
+}, true);
+
+// ---------- SCROLL ----------
+let lastScroll = window.scrollY;
+window.addEventListener('scroll', debounce(() => {
+    const delta = Math.abs(window.scrollY - lastScroll);
+    if (delta > 300) { // Higher threshold to reduce noise
+        lastScroll = window.scrollY;
+        recordEvent(buildEvent('scroll', null, {
+            y: Math.round(window.scrollY),
+            direction: window.scrollY > lastScroll ? 'down' : 'up'
+        }));
+    }
+}, 400), { passive: true }); // Longer debounce
+
+// ---------- NAVIGATION ----------
+if (!window.__pageVisitRecorded) {
+    window.__pageVisitRecorded = true;
+    // Wait for title to load
+    if (document.readyState === 'complete') {
+        recordEvent(buildEvent('page_visit', null));
+    } else {
+        window.addEventListener('load', () => {
+            recordEvent(buildEvent('page_visit', null));
+        }, { once: true });
+    }
 }
 
-document.addEventListener("input", debounce(handleInputEvent, 100), true);
-document.addEventListener("change", handleInputEvent, true);
-
-// ------------------ FOCUS ------------------
-document.addEventListener(
-    "focusin",
-    async (e) => {
-        safeSend(
-            await buildEventObject("focus", {
-                data: await metaFromElement(e.target),
-            })
-        );
-    },
-    true
-);
-
-document.addEventListener(
-    "focusout",
-    async (e) => {
-        safeSend(
-            await buildEventObject("blur", {
-                data: await metaFromElement(e.target),
-            })
-        );
-    },
-    true
-);
-
-// ------------------ SCROLL ------------------
-function onScroll() {
-    buildEventObject("scroll", {
-        data: {
-            scrollY: window.scrollY,
-            viewport: { w: window.innerWidth, h: window.innerHeight },
-        },
-    }).then(safeSend);
-}
-window.addEventListener("scroll", debounce(onScroll, 100), { passive: true });
-
-// ------------------ NAVIGATION ------------------
-buildEventObject("page_visit", {
-    data: {
-        url: location.href,
-        title: document.title,
-        referrer: document.referrer || "",
-    },
-}).then(safeSend);
-
-window.addEventListener("popstate", () => {
-    buildEventObject("navigation", {
-        data: { url: location.href, title: document.title },
-    }).then(safeSend);
-});
-
-// ------------------ SPA pushState ------------------
 (function () {
-    const _pushState = history.pushState;
+    const push = history.pushState;
     history.pushState = function () {
-        _pushState.apply(history, arguments);
-        buildEventObject("navigation", {
-            data: { url: location.href, title: document.title }
-        }).then(safeSend);
+        push.apply(history, arguments);
+        recordEvent(buildEvent('navigation', null));
     };
 })();
-
-// ------------------ HEARTBEAT ------------------
-setInterval(() => {
-    buildEventObject("heartbeat", { data: { url: location.href } }).then(
-        safeSend
-    );
-}, 60 * 1000);
-
-// ------------------ Visibility ------------------
-document.addEventListener("visibilitychange", () => {
-    buildEventObject("visibility_change", {
-        data: { visibility: document.visibilityState }
-    }).then(safeSend);
-});
-
-// ------------------ UI State Observer ------------------
-(function () {
-    let timer = null;
-    const observer = new MutationObserver((muts) => {
-        if (
-            muts.some(
-                (m) =>
-                    m.type === "childList" &&
-                    (m.addedNodes.length > 3 || m.removedNodes.length > 3)
-            )
-        ) {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                buildEventObject("ui_state_change", {
-                    data: {
-                        hint: document.querySelector('[role="dialog"], .modal')
-                            ? "modal_opened"
-                            : "dom_updated"
-                    }
-                }).then(safeSend);
-            }, 400);
-        }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-})();
-
-// ------------------ Page Structure ------------------
-(function () {
-    function emit() {
-        buildEventObject("page_structure", {
-            data: {
-                containers: Array.from(document.body.children)
-                    .slice(0, 5)
-                    .map((e) => e.id || e.tagName),
-                route: location.pathname
-            }
-        }).then(safeSend);
-    }
-    emit();
-    let last = location.pathname;
-    setInterval(() => {
-        if (location.pathname !== last) {
-            last = location.pathname;
-            emit();
-        }
-    }, 500);
-})();
-
-console.log("CONTENT SCRIPT LOADED — WITH NOISE REDUCTION");

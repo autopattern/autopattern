@@ -1,187 +1,507 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Task Mining Dashboard</title>
+    <title>Automate Workflows</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            background: #121212;
-            font-family: Arial, sans-serif;
-            color: white;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            color: #2c3e50;
+            min-height: 100vh;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
         }
 
         #header {
-            padding: 16px;
-            background: #1f1f1f;
-            font-size: 24px;
-            font-weight: bold;
-            border-bottom: 1px solid #333;
+            padding: 32px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            animation: slideDown 0.6s ease-out;
         }
 
-        #export-controls {
-            display: flex;
-            gap: 10px;
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
-        #export-controls button {
-            padding: 8px 16px;
-            background: #0d7377;
-            border: none;
-            border-radius: 5px;
+        #header h1 {
+            font-size: 32px;
+            font-weight: 700;
             color: white;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        #export-controls button:hover {
-            background: #0f9b8e;
+            letter-spacing: -0.5px;
         }
 
         #stats {
-            padding: 16px;
-            background: #1a1a1a;
-            border-bottom: 1px solid #333;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.9);
+            margin: 24px;
+            margin-bottom: 0;
+            border-radius: 16px;
             display: flex;
-            gap: 30px;
+            gap: 32px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            animation: fadeIn 0.8s ease-out 0.2s both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .stat-item {
             display: flex;
             flex-direction: column;
+            align-items: flex-start;
         }
 
         .stat-label {
-            font-size: 12px;
-            color: #888;
+            font-size: 11px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
         }
 
         .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #0d7377;
+            font-size: 36px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        #container {
+        #main {
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        #workflows-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 24px;
+            animation: fadeIn 0.8s ease-out 0.4s both;
+        }
+
+        .workflow-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .workflow-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease-out;
+        }
+
+        .workflow-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.25);
+            border-color: rgba(102, 126, 234, 0.1);
+        }
+
+        .workflow-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .workflow-card h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+
+        .workflow-card small {
+            font-size: 13px;
+            color: #95a5a6;
             display: flex;
-            height: calc(100vh - 140px);
+            align-items: center;
+            gap: 6px;
         }
 
-        #sidebar {
-            width: 300px;
-            background: #181818;
-            border-right: 1px solid #333;
-            overflow-y: auto;
+        .workflow-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
         }
 
-        #content {
+        .workflow-card button {
             flex: 1;
+            padding: 10px 16px;
+            font-size: 13px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-view:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-view:active {
+            transform: translateY(0);
+        }
+
+        .btn-automate {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+        }
+
+        .btn-automate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4);
+        }
+
+        .btn-automate:active {
+            transform: translateY(0);
+        }
+
+        .btn-delete {
+            background: #fee;
+            color: #e74c3c;
+        }
+
+        .btn-delete:hover {
+            background: #fdd;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.2);
+        }
+
+        .btn-delete:active {
+            transform: translateY(0);
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #2c3e50;
+        }
+
+        .modal-content p {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal-content pre {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #2c3e50;
+            border: 1px solid #ecf0f1;
+        }
+
+        .modal-content button {
+            padding: 12px 24px;
+            margin-top: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-content button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .modal-content button:active {
+            transform: translateY(0);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #95a5a6;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.5);
+        }
+
+        #workflow-details {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
             padding: 20px;
             overflow-y: auto;
         }
 
-        .workflow-item {
-            padding: 12px;
-            margin: 10px;
-            background: #222;
+        #workflow-details > div {
+            background: white;
             border-radius: 8px;
+            padding: 24px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        #workflow-details h2 {
+            margin-bottom: 16px;
+        }
+
+        #workflow-details button {
+            padding: 8px 16px;
+            background: #0d7377;
+            color: white;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
-            border: 1px solid #333;
-        }
-
-        .workflow-item:hover {
-            background: #333;
-        }
-
-        .workflow-item.filtered {
-            background: #1a3a1a;
-            border-color: #2d5a2d;
+            margin-bottom: 16px;
         }
 
         .event {
-            padding: 10px;
-            margin: 10px 0;
-            background: #181818;
+            margin: 12px 0;
+            padding: 12px;
+            background: #f9f9f9;
+            border-left: 3px solid #0d7377;
+            border-radius: 4px;
+        }
+
+        .event strong {
+            color: #0d7377;
+        }
+
+        .event details {
+            margin-top: 8px;
+        }
+
+        .event pre {
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 11px;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
             border-radius: 8px;
-            border: 1px solid #333;
+            padding: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
-        .event.filtered {
-            background: #1a2a1a;
-            border-color: #2d4a2d;
+        .modal-content button {
+            padding: 8px 16px;
+            margin-right: 8px;
+            margin-top: 12px;
+            background: #0d7377;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
-        .filter-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            background: #2d5a2d;
-            border-radius: 3px;
-            font-size: 10px;
-            margin-left: 8px;
+        .modal-content button:hover {
+            background: #0f9b8e;
         }
 
-        .combined-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            background: #5a4d2d;
-            border-radius: 3px;
-            font-size: 10px;
-            margin-left: 8px;
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            font-size: 48px;
+            margin-bottom: 16px;
         }
     </style>
 </head>
-
 <body>
     <div id="header">
-        <span>Task Mining Dashboard</span>
-        <div id="export-controls">
-            <button id="export-csv">Export Events CSV</button>
-            <button id="export-workflows-csv">Export Workflows CSV</button>
-            <button id="export-summary">Export Summary CSV</button>
-
-            <!-- ⭐ New Full Dataset Button -->
-            <button id="export-full-db">Export Full DB CSV</button>
-        </div>
-
+        <h1>Automate Workflows</h1>
     </div>
 
     <div id="stats">
         <div class="stat-item">
-            <span class="stat-label">Total Events</span>
-            <span class="stat-value" id="stat-total">0</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Workflows</span>
+            <span class="stat-label">Total Workflows</span>
             <span class="stat-value" id="stat-workflows">0</span>
         </div>
-        <div class="stat-item">
-            <span class="stat-label">Filtered Events</span>
-            <span class="stat-value" id="stat-filtered">0</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Event Types</span>
-            <span class="stat-value" id="stat-types">0</span>
-        </div>
     </div>
 
-    <div id="container">
-        <!-- LEFT: Workflows -->
-        <div id="sidebar">
-            <h3 style="padding-left:10px;">Workflows</h3>
-            <div id="workflow-list"></div>
-        </div>
-
-        <!-- RIGHT: Selected Workflow Details -->
-        <div id="content">
-            <h2 id="workflow-title">Select a workflow</h2>
-            <div id="workflow-events"></div>
-        </div>
+    <div id="main">
+        <div id="workflows-list"></div>
     </div>
 
-    <script src="../utils/csvExporter.js"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>
